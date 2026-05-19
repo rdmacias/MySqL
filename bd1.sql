@@ -6,28 +6,38 @@
 
 -- exemple actualitzat per a obligar a treballar amb taules INNODB
 
-drop database BD1;
 
-create database BD1;
-use BD1;
+--varchar(25) limit real de longitud.   --int(5) limit de visualitzacio
+--zerofill per a que els numeros es mostrin amb zeros a l'esquerra.  --auto_increment per a que el valor s'incrementi automàticament cada cop que s'insereix un nou registre
+-- autoincrement només es pot utilitzar en una columna que sigui clau primària o que tingui un índex únic.  --constraint per a definir restriccions com claus primàries o foranes. 
+ --primary key per a definir la clau primària d'una taula.  
+ --foreign key per a definir una clau forana que fa referència a una altra taula. 
+  --engine=innodb per a especificar el motor de base de dades InnoDB, que suporta transaccions i claus foranes.
 
-create table vi (
-  codi int(5) zerofill not null auto_increment,
-  nom varchar(25),
-  constraint pk_vi primary key (codi)
+drop database BDPesca;
+
+create database BDPesca;
+use BDPesca;
+
+create table zones (
+  id_zones int(5) zerofill not null
+  nom_massa varchar(25) not null,
+  municipi varchar(25),
+  limit_superior varchar(25),
+  limit_inferior varchar(25),
+  tipus varchar(15), not null, --es total
+  constraint pk_zones primary key (id_zones, nom_massa),
+  constraint check_tipus check (tipus in ("esportiva", "sense_mort", "veda"))
+ 
 ) engine=innodb;
 
-insert into vi(nom) values ('Castell del Remei 2000');
-insert into vi(nom) values ('Les Terrasses 2007');
-insert into vi(nom) values ('Gran Coronas 2005');
-insert into vi(nom) values ('Perlat 2007');
-insert into vi(nom) values ('Castell del Remei 1780');
 
-
-create table varietat (
-  nom varchar(20) not null,
-  descripcio varchar(30),
-  constraint pk_varietat primary key (nom)
+create table especies (
+  nom_popular varchar(20) not null,
+  nom_cientific varchar(30),
+  longitud_mitja float(5,2) not null,
+  constraint pk_especies check (longitud_mitja >0),
+  constraint pk_nom_popular primary key (nom_popular)
 ) engine=innodb;
 
 insert into varietat(nom) values ('Garnatxa');

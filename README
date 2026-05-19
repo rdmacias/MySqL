@@ -1,0 +1,72 @@
++
+
+Fase 1 — Definición y creación de la BD (apartado 1)
+El orden de creación de tablas importa por las claves foráneas. Sigue este orden:
+
+Persones
+Funcionaris y Pescadors (subclases — FK a Persones)
+Especies
+Zones (no se crea tabla Masses_aigua ni Dates, según la simplificación)
+Habitats, Permisos, Captures (dependen de Zones y Especies)
+Assignacions (depende de Funcionaris y Zones)
+Multes (depende de Funcionaris, Pescadors y Zones)
+
+Restricciones a no olvidar:
+
+Inherentes: PK, FK, NOT NULL en atributos obligatorios, UNIQUE para claves alternativas (nss, nom_cientific).
+Disyunción S,T (Funcionaris/Pescadors): el modelo marca Solapada+Total. La totalidad ("toda persona es funcionario o pescador") es difícil de imponer declarativamente — documéntalo y usa un trigger o assertion si tu SGBD lo permite.
+Tipo de zona: añade columna tipus en Zones con CHECK (tipus IN ('normal','esportiva','sense_mort','vedat')). Es la base para las restricciones b) y c) de captures/permisos.
+Restricción (b) — máx 50 permisos por fecha y zona: CHECK (num_max <= 50) en Permisos. Si querías limitar la suma por fecha, necesitarías un trigger; aquí la lectura natural es por fila.
+Restricción (c) — long_min de captures ≤ long_mitja de la especie en adulto: esto cruza dos tablas, así que necesita trigger (BEFORE INSERT/UPDATE en Captures) o assertion. Es la parte más delicada del apartado 1.
+Restricciones de tipo de zona en interrelaciones: captures solo en zonas normal/esportiva; permisos solo en sense_mort/normal/esportiva. También requiere trigger.
+
+
+Fase 2 — Inserciones (apartado 2)
+Diseña los datos pensando en las consultas que tendrás que hacer después. Si no, te arriesgas a que varias consultas devuelvan vacío y no puedas demostrar que funcionan.
+Mínimos recomendados:
+
+8-10 persones, repartidas: algunas solo funcionaris, algunas solo pescadors, al menos 2 que sean ambas cosas (para la vista 6a).
+Pescadors de Catalunya y de otras comunidades (para la consulta 3a).
+4-5 especies, con long_mitja variada (algunas >20 cm, otras ≤20 — para la vista 6b y la consulta 3c).
+3-4 masses d'aigua, incluyendo "riu Ara" (para la consulta 3e).
+Zones de los 4 tipos, incluyendo vedats (para 3d) y zonas sin assignació activa (para 3f).
+Habitats que cubran: una especie que viva en todas las masses (consulta 3b), una que viva solo en el riu Ara (3e).
+Permisos en al menos 3 fechas distintas para alguna zona (3c).
+Captures con long_min < 20 en esas zonas (3c).
+Assignacions: algunas con data_fi NULL (activas), otras cerradas. Funcionarios con >2 assignacions (apartado 4).
+Multes: variar cantidades por pescador, incluir un pescador con DNI 98765435 (apartado 5) y otros con más/menos multas que él.
+
+
+Fase 3 — Consultas (apartado 3)
+Pistas técnicas por consulta:
+
+3a — Funcionaris que NO son pescadors Y que NO han multado a pescadors de Catalunya: doble NOT EXISTS (o NOT IN). Cuidado con NULL si usas NOT IN.
+3b — Especies que habitan en todas las masses: división relacional. Patrón clásico NOT EXISTS (... NOT EXISTS ...) o contar con GROUP BY HAVING COUNT(DISTINCT) = (SELECT COUNT(*) FROM Masses).
+3c — Zones con permisos en ≥3 fechas Y alguna captura con long_min < 20: GROUP BY ... HAVING COUNT(DISTINCT data_vigencia) >= 3 combinado con EXISTS sobre Captures.
+3d — Zones sin vedat con el mayor número de permisos: subconsulta con MAX o ALL. Atención a qué significa "número de permisos" (¿filas en Permisos? ¿suma de num_max?).
+3e — Especies que habitan solo en el riu Ara: EXISTS para el riu Ara y NOT EXISTS para cualquier otra massa.
+3f — Multes en zones sin assignació activa (activa = data_fi IS NULL o data_fi > CURRENT_DATE): NOT EXISTS sobre Assignacions.
+
+Para cada consulta documenta: enunciado, SQL, captura del resultado.
+
+
+Fase 4 — Modificación y borrado (apartados 4 y 5)
+
+Apartado 4: UPDATE Funcionaris SET sou = sou * 1.05 WHERE DNI IN (SELECT funcionari FROM Assignacions GROUP BY funcionari HAVING COUNT(*) > 2);
+Apartado 5: borra multas de pescadores con COUNT(multes) <= COUNT(multes del DNI 98765435). Necesitarás una subconsulta correlacionada o un CTE.
+
+Importante: haz SELECT de las tablas afectadas antes y después para mostrar el efecto en la documentación.
+Entregable: 04_modificacio.sql, 05_esborrat.sql + capturas antes/después.
+
+
+Fase 5 — Vistas (apartado 6)
+
+6a — Persones que son funcionaris Y pescadors: JOIN de Funcionaris y Pescadors sobre DNI, luego join con Persones para nombre y ciudad.
+6b — Especies con long_mitja > 20: vista simple sobre Especies.
+
+Sobre la actualizabilidad, justifica con criterios estándar (regla general: una vista es actualizable si proviene de una sola tabla base, sin DISTINCT/GROUP BY/agregaciones/UNION, y contiene la PK):
+
+6a: no actualizable directamente — involucra 3 tablas con join. Un INSERT en la vista no sabría a cuál insertar. Ejemplo concreto: si intentas insertar un nuevo registro, ¿se inserta en Persones, Funcionaris o Pescadors? Habría que usar un INSTEAD OF trigger.
+6b: actualizable — viene de una sola tabla, incluye la PK, sin agregaciones. Pero ojo: si insertas/actualizas una fila con long_mitja ≤ 20, desaparecería de la vista (a menos que uses WITH CHECK OPTION).
+
+ç
